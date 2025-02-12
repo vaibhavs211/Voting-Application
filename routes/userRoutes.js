@@ -8,6 +8,20 @@ router.post('/signup', async (req, res) => {
     try {
         const data = req.body;
 
+        const adminUser = await User.findOne({ role: 'admin' });
+        if (data.role === 'admin' && adminUser) {
+            return res.status(400).json({ error: 'Admin user already exists' });
+        }
+
+        if (!/^\d{12}$/.test(data.aadharCardNumber)) {
+            return res.status(400).json({ error: 'Aadhar Card Number must be exactly 12 digits' });
+        }
+
+        const existingUser = await User.findOne({ aadharCardNumber: data.aadharCardNumber });
+        if (existingUser) {
+            return res.status(400).json({ error: 'User with the same Aadhar Card Number already exists' });
+        }
+
         const newUser = new User(data);
 
         const savedUser = await newUser.save();
@@ -16,8 +30,8 @@ router.post('/signup', async (req, res) => {
         const payload = {
             id: savedUser.id
         }
+        console.log(JSON.stringify(payload));
         const token = generateToken(payload);
-        console.log("generated token: ",token);
 
         res.status(200).json({response: savedUser, token: token});
     } catch (err) {
@@ -31,10 +45,14 @@ router.post('/login', async (req,res) => {
     try {
         const {aadharCardNumber, password} = req.body;
 
-        const user = await Person.findOne({aadharCardNumber:aadharCardNumber});
+        if (!aadharCardNumber || !password) {
+            return res.status(400).json({ error: 'Aadhar Card Number and password are required' });
+        }
+
+        const user = await User.findOne({aadharCardNumber:aadharCardNumber});
 
         if(!user || !await user.comparePassword(password)){
-            return res.status(401).json({error: 'Invalid username or password'});
+            return res.status(401).json({error: 'Invalid Aadhar or password'});
         }
 
         // generate tokens
@@ -68,6 +86,10 @@ router.put("/profile/password", jwtAuthMiddleware, async (req, res) => {
         const userId = req.user; // Extract the id from token
         const {currentPassword, newPassword} = req.body;
 
+        if (!currentPassword || !newPassword) {
+            return res.status(400).json({ error: 'Both currentPassword and newPassword are required' });
+        }
+        
         const user = await User.findById(userId);
         
         if(!user || !await user.comparePassword(currentPassword)){
